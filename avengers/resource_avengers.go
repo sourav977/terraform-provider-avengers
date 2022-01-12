@@ -2,7 +2,7 @@ package avengers
 
 import (
 	"context"
-	"strconv"
+	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -10,13 +10,41 @@ import (
 	aclient "github.com/sourav977/avengers-client"
 )
 
-func resourceOrder() *schema.Resource {
+func resourceAvengers() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceAvengersCreate,
 		ReadContext:   resourceAvengersRead,
 		UpdateContext: resourceAvengersUpdate,
 		DeleteContext: resourceAvengersDelete,
 		Schema: map[string]*schema.Schema{
+			"avengers": &schema.Schema{
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"_id": &schema.Schema{
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "the _id value returned from mongodb",
+						},
+						"name": &schema.Schema{
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "full name of avenger",
+						},
+						"alias": &schema.Schema{
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "any alias/nickname of avenger",
+						},
+						"weapon": &schema.Schema{
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: "his/her special weapons",
+						},
+					},
+				},
+			},
 			"_id": &schema.Schema{
 				Type:        schema.TypeString,
 				Computed:    true,
@@ -25,34 +53,34 @@ func resourceOrder() *schema.Resource {
 			"name": &schema.Schema{
 				Type:        schema.TypeString,
 				Required:    true,
-				Description: "name of avenger",
+				Description: "full name of avenger",
 			},
 			"alias": &schema.Schema{
 				Type:        schema.TypeString,
 				Required:    true,
-				Description: "any alias of avenger",
+				Description: "any alias/nickname of avenger",
 			},
 			"weapon": &schema.Schema{
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "his/her special weapons",
 			},
-			"DeletedCount": &schema.Schema{
+			"deleted_count": &schema.Schema{
 				Type:        schema.TypeInt,
 				Computed:    true,
 				Description: "deleted item count",
 			},
-			"MatchedCount": &schema.Schema{
+			"matched_count": &schema.Schema{
 				Type:        schema.TypeInt,
 				Computed:    true,
 				Description: "total matched item found",
 			},
-			"ModifiedCount": &schema.Schema{
+			"modified_count": &schema.Schema{
 				Type:        schema.TypeInt,
 				Computed:    true,
 				Description: "total item modified",
 			},
-			"UpsertedCount": &schema.Schema{
+			"upserted_count": &schema.Schema{
 				Type:        schema.TypeInt,
 				Computed:    true,
 				Description: "total item upserted",
@@ -66,126 +94,114 @@ func resourceOrder() *schema.Resource {
 
 func resourceAvengersCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	// Warning or errors can be collected in a slice type
+	log.Printf("[DEBUG] %s: Beginning resourceAvengersCreate", d.Id())
 	var diags diag.Diagnostics
-	c := m.(aclient.Client)
+	c := m.(*ApiClient)
 
-	name := d.Get("name")
-	alias := d.Get("alias")
-	weapon := d.Get("weapon")
+	name := d.Get("name").(string)
+	alias := d.Get("alias").(string)
+	weapon := d.Get("weapon").(string)
 
 	a := aclient.Avenger{
-		Name:   name.(string),
-		Alias:  alias.(string),
-		Weapon: weapon.(string),
+		Name:   name,
+		Alias:  alias,
+		Weapon: weapon,
 	}
 
-	res, err := c.CreateAvenger(a)
+	res, err := c.avengersclient.CreateAvenger(a)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	resItem := flattenAvenger(res)
-	r := resItem.(aclient.Avenger)
-	if err := d.Set("_id", r.ID); err != nil {
+	if err := d.Set("_id", res.ID); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("name", r.Name); err != nil {
+	if err := d.Set("name", res.Name); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("alias", r.Alias); err != nil {
+	if err := d.Set("alias", res.Alias); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("weapon", r.Weapon); err != nil {
+	if err := d.Set("weapon", res.Weapon); err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(strconv.Itoa(res.ID))
-
+	d.SetId(res.ID)
+	log.Printf("[DEBUG] %s: resourceAvengersCreate finished successfully", d.Id())
 	return diags
 }
 
 func resourceAvengersRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	// Warning or errors can be collected in a slice type
+	log.Printf("[DEBUG] %s: Beginning resourceAvengersRead", d.Id())
 	var diags diag.Diagnostics
-	c := m.(aclient.Client)
-	res, err := c.GetAllAvengers()
+	c := m.(*ApiClient)
+	res, err := c.avengersclient.GetAllAvengers()
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
-	resItems := flattenAvengers(&res)
-	if err := d.Set("avengers", resItems); err != nil {
-		return diag.FromErr(err)
+	if res != nil {
+		//As the return item is a []Avengers, lets Unmarshal it into "avengers"
+		resItems := flattenAvengers(&res)
+		if err := d.Set("avengers", resItems); err != nil {
+			return diag.FromErr(err)
+		}
+	} else {
+		return diag.Errorf("no data found in db, insert one")
 	}
-
+	log.Printf("[DEBUG] %s: resourceAvengersRead finished successfully", d.Id())
 	return diags
 }
 
 func resourceAvengersUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	// Warning or errors can be collected in a slice type
+	log.Printf("[DEBUG] %s: Beginning resourceAvengersUpdate", d.Id())
 	var diags diag.Diagnostics
-	c := m.(aclient.Client)
+	c := m.(*ApiClient)
 
-	name := d.Get("name")
-	alias := d.Get("alias")
-	weapon := d.Get("weapon")
+	name := d.Get("name").(string)
+	alias := d.Get("alias").(string)
+	weapon := d.Get("weapon").(string)
 
 	a := aclient.Avenger{
-		Name:   name.(string),
-		Alias:  alias.(string),
-		Weapon: weapon.(string),
+		Name:   name,
+		Alias:  alias,
+		Weapon: weapon,
 	}
-	res, err := c.UpdateAvengerByName(a)
+	res, err := c.avengersclient.UpdateAvengerByName(a)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	resItem := flattenUpdateItem(res)
-	r := resItem.(aclient.UpdateResult)
-	if err := d.Set("MatchedCount", r.MatchedCount); err != nil {
+	if err := d.Set("matched_count", res.MatchedCount); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("ModifiedCount", r.ModifiedCount); err != nil {
+	if err := d.Set("modified_count", res.ModifiedCount); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("UpsertedCount", r.UpsertedCount); err != nil {
+	if err := d.Set("upserted_count", res.UpsertedCount); err != nil {
 		return diag.FromErr(err)
 	}
-
+	log.Printf("[DEBUG] %s: resourceAvengersUpdate finished successfully", d.Id())
 	return diags
 }
+
 func resourceAvengersDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	// Warning or errors can be collected in a slice type
+	log.Printf("[DEBUG] %s: Beginning resourceAvengersDelete", d.Id())
 	var diags diag.Diagnostics
-	c := m.(aclient.Client)
-	name := d.Get("name")
-	del, err := c.DeleteAvengerByName(name.(string))
+	c := m.(*ApiClient)
+	name := d.Get("name").(string)
+	del, err := c.avengersclient.DeleteAvengerByName(name)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	resItems := flattenDeleteItem(del)
-	if err := d.Set("DeletedCount", resItems); err != nil {
+	if err := d.Set("deleted_count", del.DeletedCount); err != nil {
 		return diag.FromErr(err)
 	}
 	d.SetId("")
+	log.Printf("[DEBUG] %s: resourceAvengersDelete finished successfully", d.Id())
 	return diags
-}
-
-func flattenAvenger(avenger *aclient.Avenger) interface{} {
-	al := make(map[string]interface{})
-	al["_id"] = avenger.ID
-	al["avenger_name"] = avenger.Name
-	al["avenger_alias"] = avenger.Alias
-	al["avenger_weapon"] = avenger.Weapon
-	return al
-}
-
-func flattenUpdateItem(update *aclient.UpdateResult) interface{} {
-	up := make(map[string]interface{})
-	up["MatchedCount"] = update.MatchedCount
-	up["ModifiedCount"] = update.ModifiedCount
-	up["UpsertedCount"] = update.UpsertedCount
-	return up
 }
 
 func flattenAvengers(avengersList *[]aclient.Avenger) []interface{} {
@@ -195,19 +211,13 @@ func flattenAvengers(avengersList *[]aclient.Avenger) []interface{} {
 			al := make(map[string]interface{})
 
 			al["_id"] = avenger.ID
-			al["avenger_name"] = avenger.Name
-			al["avenger_alias"] = avenger.Alias
-			al["avenger_weapon"] = avenger.Weapon
+			al["name"] = avenger.Name
+			al["alias"] = avenger.Alias
+			al["weapon"] = avenger.Weapon
 
 			avengers[i] = al
 		}
 		return avengers
 	}
 	return make([]interface{}, 0)
-}
-
-func flattenDeleteItem(res *aclient.DeleteResult) []interface{} {
-	a := make(map[string]interface{})
-	a["DeletedCount"] = res.DeletedCount
-	return []interface{}{a}
 }

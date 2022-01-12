@@ -1,9 +1,10 @@
 TEST?=$$(go list ./... | grep -v 'vendor')
 HOSTNAME=github.com
-NAMESPACE=custom-terraform-provider
+NAMESPACE=sourav977
 NAME=avengers
 BINARY=terraform-provider-${NAME}
-VERSION=1.0.0
+VERSION=1.0.1
+OS=darwin
 OS_ARCH=amd64
 
 default: install
@@ -29,8 +30,8 @@ release:
 	GOOS=windows GOARCH=amd64 go build -o ./bin/${BINARY}_${VERSION}_windows_amd64
 
 install: build
-	mkdir -p ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}
-	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}
+	mkdir -p ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS}_${OS_ARCH}
+	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS}_${OS_ARCH}
 
 test: 
 	go test -i $(TEST) || exit 1                                                   

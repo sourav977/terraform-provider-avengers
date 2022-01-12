@@ -1,20 +1,30 @@
 terraform {
   required_providers {
     avengers = {
-      version = "1.0.0"
-      source  = "github.com/custom-terraform-provider/avengers"
+      version = "1.0.1"
+      source  = "github.com/sourav977/avengers"
     }
   }
 }
 
-provider "avengers" {}
-
-module "psl" {
-  source = "./avengers"
-
-  name = "zido"
+provider "avengers" {
+  host = "http://localhost:8000"
 }
 
-output "psl" {
-  value = module.psl.avenger
+resource "avengers_resource" "foo" {
+  name = "sourav patnaik"
+  alias = "sikan"
+  weapon = "hammer"
+}
+
+output "created_avenger" {
+  value = avengers_resource.foo
+}
+
+
+data "avengers_datasource" "all" {}
+
+# Returns all avengers
+output "all_avengers" {
+  value = data.avengers_datasource.all.avengers
 }
